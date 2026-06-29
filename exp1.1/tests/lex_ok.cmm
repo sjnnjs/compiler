@@ -1,0 +1,12 @@
+int main()
+{
+    // line comment
+    /*
+       block comment
+    */
+    int i = 0123;
+    int j = 0x3F;
+    float x = 1.05e-4;
+    if (i >= j) return i;
+    else return x;
+}

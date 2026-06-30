@@ -1,0 +1,12 @@
+# Local environment helpers and downloaded tool packages.
+/tools/
+
+# Generated files for exp1.2. They can be rebuilt with `make`.
+/exp1.2/cc
+/exp1.2/lex.yy.c
+/exp1.2/parser.tab.c
+/exp1.2/parser.tab.h
+
+# Crash dumps produced while testing.
+core
+core.*

@@ -1,0 +1,17 @@
+struct Complex
+{
+    float real, image;
+};
+
+int inc()
+{
+    int i;
+    i = i + 1;
+}
+
+int main()
+{
+    struct Complex x;
+    x.real = 1.05e-4;
+    x.image = 0x3F;
+}

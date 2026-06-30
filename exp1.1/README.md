@@ -44,7 +44,7 @@ Error type A at Line [行号]: [说明文字].
 进入本目录：
 
 ```bash
-cd /Users/shengjianuo/Desktop/compiler/exp1.1
+cd ~/compiler/exp1.1
 ```
 
 编译：
@@ -66,4 +66,4 @@ make test
 ./lexer your_source_file.cmm
 ```
 
-当前完成的是词法分析部分，尚未接入 Bison，因此不会生成语法树，也不会报告语法错误 B。
+当前目录保留为独立的词法分析实验。语法分析部分已经在 `../exp1.2` 中实现，那里使用 Bison 接收结构化 token 并生成语法树。

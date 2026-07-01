@@ -7,6 +7,13 @@
 /exp1.2/parser.tab.c
 /exp1.2/parser.tab.h
 
+# Generated files for exp2.0. They can be rebuilt with `make`.
+/exp2.0/cc
+/exp2.0/cc_debug
+/exp2.0/lex.yy.c
+/exp2.0/parser.tab.c
+/exp2.0/parser.tab.h
+
 # Crash dumps produced while testing.
 core
 core.*

@@ -85,7 +85,7 @@ make test
 ```text
 Error type 1 at Line 4: Undefined variable "j".
 Error type 4 at Line 6: Redefined function "func".
-Error type 9 at Line 8: Function arguments mismatched for "func".
+Error type 9 at Line 8: Function "func(int)" is not applicable for arguments "(int, int)".
 Error type 17 at Line 3: Undefined structure "Position".
 ```
 

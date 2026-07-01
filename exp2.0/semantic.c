@@ -21,6 +21,8 @@ typedef struct Type Type;
 typedef struct Field Field;
 typedef struct Symbol Symbol;
 
+#define TYPE_TEXT_SIZE 256
+
 struct Type {
     TypeKind kind;
     BasicKind basic;
@@ -168,6 +170,89 @@ static void semantic_error_quoted_suffix(SemanticContext *ctx, int type, int lin
     char buffer[256];
     snprintf(buffer, sizeof(buffer), "\"%s\" %s", name, suffix);
     semantic_error(ctx, type, line, buffer);
+}
+
+static void append_text(char *buffer, size_t size, const char *text)
+{
+    size_t used = strlen(buffer);
+
+    if (used + 1 < size) {
+        snprintf(buffer + used, size - used, "%s", text);
+    }
+}
+
+static void append_type_text(Type *type, char *buffer, size_t size)
+{
+    if (type == NULL) {
+        append_text(buffer, size, "unknown");
+        return;
+    }
+
+    switch (type->kind) {
+    case TYPE_BASIC:
+        append_text(buffer, size, type->basic == BASIC_FLOAT ? "float" : "int");
+        break;
+    case TYPE_ARRAY:
+        append_type_text(type->elem, buffer, size);
+        append_text(buffer, size, "[]");
+        break;
+    case TYPE_STRUCT:
+        append_text(buffer, size, "struct ");
+        append_text(buffer, size, type->struct_name != NULL ? type->struct_name : "<anonymous>");
+        break;
+    case TYPE_FUNCTION:
+        append_text(buffer, size, "function");
+        break;
+    case TYPE_ERROR:
+        append_text(buffer, size, "error");
+        break;
+    }
+}
+
+static void append_field_type_list(Field *fields, char *buffer, size_t size)
+{
+    Field *field;
+
+    append_text(buffer, size, "(");
+    for (field = fields; field != NULL; field = field->next) {
+        if (field != fields) {
+            append_text(buffer, size, ", ");
+        }
+        append_type_text(field->type, buffer, size);
+    }
+    append_text(buffer, size, ")");
+}
+
+static void report_function_argument_error(SemanticContext *ctx, int line,
+                                           const char *name, Type *function_type,
+                                           const char *actual_args)
+{
+    char params[TYPE_TEXT_SIZE] = "";
+    char message[TYPE_TEXT_SIZE * 2] = "";
+
+    append_field_type_list(function_type->params, params, sizeof(params));
+    snprintf(message, sizeof(message),
+             "Function \"%s%s\" is not applicable for arguments \"%s\"",
+             name, params, actual_args);
+    semantic_error(ctx, 9, line, message);
+}
+
+static void start_arg_text(char *buffer, size_t size)
+{
+    snprintf(buffer, size, "(");
+}
+
+static void append_arg_text(char *buffer, size_t size, Type *type, int index)
+{
+    if (index > 0) {
+        append_text(buffer, size, ", ");
+    }
+    append_type_text(type, buffer, size);
+}
+
+static void finish_arg_text(char *buffer, size_t size)
+{
+    append_text(buffer, size, ")");
 }
 
 static Symbol *find_symbol(Symbol *head, const char *name)
@@ -489,7 +574,8 @@ static int is_left_value(ASTNode *exp)
 }
 
 static Type *analyze_args(SemanticContext *ctx, ASTNode *args, Field *params,
-                          int *arg_count, int *mismatch)
+                          int *arg_count, int *mismatch,
+                          char *arg_text, size_t arg_text_size)
 {
     Type *arg_type;
     Field *next_param = params;
@@ -502,6 +588,7 @@ static Type *analyze_args(SemanticContext *ctx, ASTNode *args, Field *params,
     }
 
     arg_type = analyze_exp(ctx, child_at(args, 0));
+    append_arg_text(arg_text, arg_text_size, arg_type, *arg_count);
     ++*arg_count;
     if (next_param == NULL || !same_type(arg_type, next_param->type)) {
         *mismatch = 1;
@@ -510,7 +597,8 @@ static Type *analyze_args(SemanticContext *ctx, ASTNode *args, Field *params,
     }
 
     if (child_count(args) == 3) {
-        analyze_args(ctx, child_at(args, 2), next_param, arg_count, mismatch);
+        analyze_args(ctx, child_at(args, 2), next_param, arg_count, mismatch,
+                     arg_text, arg_text_size);
     } else if (next_param != NULL) {
         *mismatch = 1;
     }
@@ -635,7 +723,7 @@ static Type *analyze_exp(SemanticContext *ctx, ASTNode *exp)
                 return &type_error_value;
             }
             if (func->type->param_count != 0) {
-                semantic_error_name(ctx, 9, first->line, "Function arguments mismatched for", first->text);
+                report_function_argument_error(ctx, first->line, first->text, func->type, "()");
             }
             return func->type->return_type;
         }
@@ -647,18 +735,24 @@ static Type *analyze_exp(SemanticContext *ctx, ASTNode *exp)
             Symbol *var = find_symbol(ctx->variables, first->text);
             int arg_count = 0;
             int mismatch = 0;
+            char actual_args[TYPE_TEXT_SIZE] = "";
+            start_arg_text(actual_args, sizeof(actual_args));
             if (func == NULL) {
                 if (var != NULL) {
                     semantic_error_quoted_suffix(ctx, 11, first->line, first->text, "is not a function");
                 } else {
                     semantic_error_name(ctx, 2, first->line, "Undefined function", first->text);
                 }
-                analyze_args(ctx, child_at(exp, 2), NULL, &arg_count, &mismatch);
+                analyze_args(ctx, child_at(exp, 2), NULL, &arg_count, &mismatch,
+                             actual_args, sizeof(actual_args));
                 return &type_error_value;
             }
-            analyze_args(ctx, child_at(exp, 2), func->type->params, &arg_count, &mismatch);
+            analyze_args(ctx, child_at(exp, 2), func->type->params, &arg_count, &mismatch,
+                         actual_args, sizeof(actual_args));
+            finish_arg_text(actual_args, sizeof(actual_args));
             if (mismatch || arg_count != func->type->param_count) {
-                semantic_error_name(ctx, 9, first->line, "Function arguments mismatched for", first->text);
+                report_function_argument_error(ctx, first->line, first->text,
+                                               func->type, actual_args);
             }
             return func->type->return_type;
         }

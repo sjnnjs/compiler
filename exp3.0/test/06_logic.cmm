@@ -1,0 +1,11 @@
+int main()
+{
+    int a, b, ok;
+    a = 1;
+    b = 2;
+    ok = 0;
+    if ((a < b && !(b < a)) || a == 0)
+        ok = 1;
+    write(ok);
+    return 0;
+}

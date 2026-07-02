@@ -4,7 +4,7 @@
 
 ## 1. 当前项目状态
 
-当前已完成 `exp1.1` 词法分析实验、`exp1.2` 语法分析实验和 `exp2.0` 语义分析实验。
+当前已完成 `exp1.1` 词法分析实验、`exp1.2` 语法分析实验、`exp2.0` 语义分析实验和 `exp3.0` 中间代码生成实验。
 
 `exp1.1` 核心文件为：
 
@@ -48,6 +48,21 @@ exp2.0/
 ```
 
 `exp2.0` 在语法分析成功后进行语义分析。无语义错误时不输出任何内容；有语义错误时输出 `Error type 1` 至 `Error type 17`。
+
+`exp3.0` 核心文件为：
+
+```text
+exp3.0/
+├── lexer.l              # 复用结构化 token 前端
+├── parser.y             # 构建 AST，调度语义检查和 IR 生成
+├── ast.h / ast.c
+├── semantic.h / semantic.c
+├── ir.h / ir.c          # 中间代码生成器
+├── Makefile
+└── test/
+```
+
+`exp3.0` 在语义分析通过后生成课程表 4.6 格式的中间代码。程序输入为 C-- 源文件路径和 IR 输出文件路径。
 
 ## 2. 环境要求
 
@@ -182,7 +197,42 @@ make test
 有语义错误：逐行输出 Error type N at Line X: ...
 ```
 
-当前输出示例：
+### 3.4 中间代码生成实验 3.0
+
+进入中间代码生成目录：
+
+```bash
+cd ~/compiler/exp3.0
+```
+
+重新构建：
+
+```bash
+make clean
+make
+```
+
+运行全部样例：
+
+```bash
+make test
+```
+
+运行自定义 C-- 源文件并输出 IR：
+
+```bash
+./cc your_source_file.cmm output.ir
+```
+
+中间代码生成程序的输出约定：
+
+```text
+无错误：将中间代码写入指定输出文件
+有词法/语法/语义错误：输出对应错误，不生成 IR
+遇到必做范围外结构：输出 Cannot translate: ...
+```
+
+词法分析输出示例：
 
 ```text
 TYPE: int
@@ -205,9 +255,9 @@ Error type A at Line 3: Illegal octal number "09".
 程序退出码约定：
 
 ```text
-0  词法分析完成且没有词法错误
-1  命令行参数错误或输入文件无法打开
-2  词法分析完成但发现词法错误
+0  当前阶段成功完成
+1  命令行参数错误，或输入/输出文件无法打开
+2  发现词法、语法、语义错误，或遇到当前实验范围外的不可翻译结构
 ```
 
 ## 4. 当前词法模块的行为
@@ -358,42 +408,31 @@ typedef struct Field Field;
 
 语义错误按课程要求输出对应错误类型。只要语义分析存在错误，后续中间代码和目标代码生成应停止，避免基于错误 AST 继续生成误导性结果。
 
+`exp3.0` 在语义分析初始化时额外预置 `read()` 和 `write(int)` 两个函数，供中间代码阶段直接翻译为 `READ` 和 `WRITE`。
+
 ### 6.4 中间代码接口
 
-中间代码生成阶段输入“通过语义检查的 AST”，输出 IR。
+中间代码生成阶段输入“通过语义检查的 AST”，输出 IR。当前 `exp3.0` 已经落地该接口。
 
-建议使用三地址码或课程要求的中间表示：
+当前对外入口为：
 
 ```c
-typedef enum IROp {
-    IR_LABEL,
-    IR_FUNCTION,
-    IR_ASSIGN,
-    IR_ADD,
-    IR_SUB,
-    IR_MUL,
-    IR_DIV,
-    IR_GOTO,
-    IR_IF_GOTO,
-    IR_RETURN,
-    IR_DEC,
-    IR_ARG,
-    IR_CALL,
-    IR_PARAM,
-    IR_READ,
-    IR_WRITE
-} IROp;
-
-typedef struct IRInstruction {
-    IROp op;
-    char *result;
-    char *arg1;
-    char *arg2;
-    char *relop;
-} IRInstruction;
+int ir_generate(ASTNode *root, const char *output_path);
 ```
 
-IR 生成阶段不应依赖源代码文本格式，而应只依赖 AST、类型信息和符号表查询接口。
+`ir_generate()` 直接遍历 AST 并将 IR 写入文件。当前实现内部维护变量映射表，把源程序变量映射为 `v1`、`v2` 等 IR 名称；表达式中间结果使用 `t1`、`t2`；控制流标号使用 `label1`、`label2`。这样可以避免源程序变量名和临时变量名冲突。
+
+当前 IR 生成阶段负责：
+
+- 生成 `FUNCTION`、`PARAM`、`RETURN`
+- 生成赋值和四则运算
+- 生成 `LABEL`、`GOTO`、`IF x relop y GOTO label`
+- 翻译 `if`、`if-else`、`while` 和短路逻辑
+- 翻译 `ARG`、`CALL`
+- 将预定义 `read()`、`write(int)` 翻译为 `READ`、`WRITE`
+- 为一维局部数组生成 `DEC`，并用 `&`、`*` 和偏移完成元素访问
+
+IR 生成阶段不依赖源代码文本格式，也不依赖前序阶段的打印结果。只要语义分析发现错误，IR 生成就不会继续执行。
 
 ### 6.5 目标代码生成接口
 
@@ -486,4 +525,17 @@ target.s 或 target.pld/target.lst/target.lab
 错误处理：未定义、重复定义、类型不匹配、非法操作符、函数实参、数组和结构体访问错误等 17 类必做语义错误
 测试结果：make test 覆盖 00_ok 和 1-17 类错误样例
 遗留问题：暂未实现函数声明、嵌套作用域和结构等价三个选做要求
+```
+
+```text
+日期：2026-07-02
+阶段：实践 3.0 中间代码生成
+新增文件：exp3.0/ir.h、exp3.0/ir.c、exp3.0/README.md、exp3.0/report.md、exp3.0/test/*
+构建命令：cd ~/compiler/exp3.0 && make clean && make
+运行命令：./cc test/01_sign.cmm test/out/01_sign.ir
+输入接口：C-- 源文件路径和 IR 输出文件路径
+输出接口：课程表 4.6 格式的中间代码文件
+错误处理：词法/语法/语义错误时停止；结构体、数组参数、高维数组等选做范围外结构输出 Cannot translate
+测试结果：make test 覆盖 read/write、递归调用、一维数组、while、多参数调用和逻辑表达式
+遗留问题：暂未实现结构体变量、结构体参数、数组参数和高维数组等选做要求
 ```

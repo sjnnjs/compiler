@@ -1,0 +1,11 @@
+int main()
+{
+    int a[3];
+    int sum;
+    a[0] = 1;
+    a[1] = 2;
+    a[2] = 3;
+    sum = a[0] + a[1] * a[2];
+    write(sum);
+    return 0;
+}
